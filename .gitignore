@@ -1,0 +1,26 @@
+# Environment and Secrets
+config.php
+.env
+.env.*
+
+# Logs and error reports
+*.log
+error_log
+logs/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Temporary and backup files
+*.bak
+*.swp
+*.tmp
+*.temp

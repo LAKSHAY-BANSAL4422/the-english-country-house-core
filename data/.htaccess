@@ -1,0 +1,2 @@
+# v20: code loaded only by the site's own PHP; never opened directly in a browser
+Require all denied

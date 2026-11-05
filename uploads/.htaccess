@@ -1,0 +1,6 @@
+# block script execution inside uploads
+<FilesMatch "\.(php|phtml|php5|pl|py|cgi|sh)$">
+  Require all denied
+</FilesMatch>
+RemoveHandler .php .phtml
+php_flag engine off

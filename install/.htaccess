@@ -1,0 +1,3 @@
+# v20: the installer and database update files are only ever loaded by the site's own PHP (includes/db.php).
+# Nobody needs to open them in a browser, and database.sql holds the table layout, so they are closed to the web.
+Require all denied

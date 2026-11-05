@@ -1,0 +1,135 @@
+Options -Indexes
+RewriteEngine On
+
+# ---- round 18: the live address has no www. www.theenglishcountryhouse.com (http or https) moves to
+# https://theenglishcountryhouse.com in one 301. Campaign codes (?utm_…, ?gclid=…, ?fbclid=…) are kept, because Apache
+# carries the query string over whenever the target has no "?" of its own.
+RewriteCond %{HTTP_HOST} ^www\.theenglishcountryhouse\.com$ [NC]
+RewriteRule ^ https://theenglishcountryhouse.com%{REQUEST_URI} [R=301,L]
+
+# ---- round 17 (technical SEO): one secure address. Every http:// request moves to https:// (301).
+# Skipped on localhost. If the live host has no SSL certificate yet, put a # in front of the four lines below.
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$ [NC]
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# round 17: a real "page not found" page with a 404 status and links back into the site
+ErrorDocument 404 /404.php
+
+# sitemap, robots, llms.txt (AEO)
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteRule ^robots\.txt$ robots.php [L]
+RewriteRule ^llms\.txt$ llms.php [L]
+RewriteRule ^manifest\.json$ manifest.php [L]
+
+# pretty URLs: /room/slug, /post/slug, /p/slug, /blog/category/slug
+RewriteRule ^room/([a-z0-9-]+)/?$ room.php?slug=$1 [L,QSA]
+RewriteRule ^post/([a-z0-9-]+)/?$ post.php?slug=$1 [L,QSA]
+RewriteRule ^p/([a-z0-9-]+)/?$ page.php?slug=$1 [L,QSA]
+RewriteRule ^blog/category/([a-z0-9-]+)/?$ blog.php?category=$1 [L,QSA]
+
+# hide .php — 301 old /name.php links to clean /name (top-level pages only,
+# so /admin, /api, /account, /cron and real files keep working)
+# round 17: the targets start with "/" — without it Apache put the server's folder path into the address
+# (/about.php went to /home/…/about, a broken page), so old .php links indexed by Google lost their ranking
+# round 17: old query-string addresses go straight to the pretty address in one 301 (/room.php?slug=x → /room/x)
+# round 18: only when the slug is the whole query. With anything else in it (?slug=x&utm_source=…) the page itself
+# answers with one 301 that keeps the campaign codes (/room/x?utm_source=…; includes/seo.php, seo_redirect_canonical)
+RewriteCond %{THE_REQUEST} \s/+room(?:\.php)?\?slug=([a-z0-9-]+)\s [NC]
+RewriteRule ^room(\.php)?$ /room/%1? [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+post(?:\.php)?\?slug=([a-z0-9-]+)\s [NC]
+RewriteRule ^post(\.php)?$ /post/%1? [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+page(?:\.php)?\?slug=([a-z0-9-]+)\s [NC]
+RewriteRule ^page(\.php)?$ /p/%1? [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+blog(?:\.php)?\?category=([a-z0-9-]+)\s [NC]
+RewriteRule ^blog(\.php)?$ /blog/category/%1? [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+index(\.php)?[\s?] [NC]
+RewriteRule ^index(\.php)?$ / [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+([a-z0-9-]+)\.php[\s?] [NC]
+RewriteCond %{THE_REQUEST} !\s/+(?:room|post|page|blog)\.php\?(?:slug|category)= [NC]
+RewriteCond %{REQUEST_URI} !^/(admin|api|account|cron|install)/ [NC]
+RewriteRule ^([a-z0-9-]+)\.php$ /$1 [R=301,L]
+
+# /index -> site root
+RewriteRule ^index/?$ / [R=301,L]
+
+# serve clean /name from name.php internally (works in subfolder installs too)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^([a-z0-9-]+)$ $1.php [L,QSA]
+
+# ---- speed: serve the .webp twin of a photo to browsers that accept it (made automatically on upload) ----
+# round 17: the site's own photos (assets/img) have .webp twins too — same address, about 30-50% fewer bytes
+RewriteCond %{HTTP_ACCEPT} image/webp
+# v21: the favicon is always served as the real PNG (a WebP at a .png address confused site checkers)
+RewriteCond %{REQUEST_URI} !/favicon
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteCond %{REQUEST_FILENAME}.webp -f
+RewriteRule ^((?:uploads|assets/img)/.+\.(?:jpe?g|png))$ $1.webp [T=image/webp,E=WEBP_SERVED:1,L]
+<IfModule mod_headers.c>
+  Header append Vary Accept env=WEBP_SERVED
+  Header append Vary Accept env=REDIRECT_WEBP_SERVED
+  <FilesMatch "\.(jpe?g|png)\.webp$">
+    Header set Content-Type "image/webp"
+  </FilesMatch>
+</IfModule>
+<IfModule mod_mime.c>
+  AddType image/webp .webp
+  AddType image/avif .avif
+  AddType video/mp4 .mp4 .m4v
+  AddType video/webm .webm
+  AddType font/woff2 .woff2
+</IfModule>
+
+# ---- speed: browser caching (CSS/JS carry a ?v= version, so long caching is safe) + compression ----
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/avif "access plus 1 year"
+  ExpiresByType image/gif "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 year"
+  ExpiresByType image/x-icon "access plus 1 year"
+  ExpiresByType video/mp4 "access plus 1 year"
+  ExpiresByType video/webm "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType text/css "access plus 1 month"
+  ExpiresByType application/javascript "access plus 1 month"
+  ExpiresByType text/javascript "access plus 1 month"
+</IfModule>
+<IfModule mod_headers.c>
+  <FilesMatch "\.(jpe?g|png|webp|avif|gif|svg|ico|mp4|webm|woff2)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "\.(css|js)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+</IfModule>
+<IfModule mod_brotli.c>
+  AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css text/javascript application/javascript application/json application/xml image/svg+xml
+</IfModule>
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json application/xml image/svg+xml
+</IfModule>
+
+# ---- round 17: security headers (Google counts HTTPS and safe browsing as page-experience signals) ----
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  # v21: HSTS is now sent by the site itself (includes/seo.php, seo_headers). The old rule here only fired when Apache
+  # set its HTTPS flag, and on the live host the header never reached browsers (audit 2 Nov 2026).
+  # keep the admin and guest areas out of search results even if someone links to them
+  <If "%{REQUEST_URI} =~ m#^/(admin|account|api|team|cron|install)/#">
+    Header always set X-Robots-Tag "noindex, nofollow"
+  </If>
+</IfModule>
+
+# security
+# v20: also the sample config, PHP's error_log files, notes (.md) and database dumps (.sql)
+<FilesMatch "^(config\.php|config\.sample\.php|.*\.log|error_log|.*\.md|.*\.sql)$">
+  Require all denied
+</FilesMatch>
